@@ -1,0 +1,173 @@
+name: Update Dockerfiles
+
+on:
+  repository_dispatch:
+    types:
+      - ghost-version-publish
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If true, do not commit the results back; only print the git diff'
+        type: boolean
+        default: false
+      make_image_pr:
+        description: 'If true, open a PR upstream to docker-library/official-images after pushing to a fork'
+        type: boolean
+        default: true
+      official_images_fork_repo:
+        description: 'Fork repo used to open the upstream PR to docker-library/official-images'
+        type: string
+        default: 'Ghost-Slimer/official-images'
+
+defaults:
+  run:
+    shell: 'bash -Eeuo pipefail -x {0}'
+
+jobs:
+  update:
+    name: Update Dockerfiles
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          # don't leave the token in .git/config for later steps (e.g. the bashbrew
+          # checkout and the official-images clone); the push below authenticates explicitly
+          persist-credentials: false
+
+      # repository_dispatch carries inputs via client_payload, workflow_dispatch via inputs;
+      # normalize both into a single set of outputs with explicit defaults.
+      - name: Resolve inputs
+        id: inputs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WD_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          WD_MAKE_IMAGE_PR: ${{ github.event.inputs.make_image_pr }}
+          WD_FORK_REPO: ${{ github.event.inputs.official_images_fork_repo }}
+          RD_DRY_RUN: ${{ github.event.client_payload.dry_run }}
+          RD_MAKE_IMAGE_PR: ${{ github.event.client_payload.make_image_pr }}
+          RD_FORK_REPO: ${{ github.event.client_payload.official_images_fork_repo }}
+        run: |
+          if [ "$EVENT_NAME" = 'repository_dispatch' ]; then
+            dry_run="${RD_DRY_RUN:-false}"
+            make_image_pr="${RD_MAKE_IMAGE_PR:-true}"
+            fork_repo="${RD_FORK_REPO:-Ghost-Slimer/official-images}"
+          else
+            dry_run="${WD_DRY_RUN:-false}"
+            make_image_pr="${WD_MAKE_IMAGE_PR:-true}"
+            fork_repo="${WD_FORK_REPO:-Ghost-Slimer/official-images}"
+          fi
+          {
+            echo "dry_run=$dry_run"
+            echo "make_image_pr=$make_image_pr"
+            echo "official_images_fork_repo=$fork_repo"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run update.sh
+        run: ./update.sh
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo 'No changes produced by update.sh.'
+          fi
+
+      # build a message following the existing convention:
+      #   "Update <major> to <version>"     for a Ghost bump
+      #   "Update <major> to CLI <version>"  for a Ghost-CLI bump
+      - name: Compute commit message
+        id: message
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          old="$(git show HEAD:versions.json 2>/dev/null || echo '{}')"
+          message="$(jq --raw-output --null-input \
+            --argjson old "$old" \
+            --argjson new "$(cat versions.json)" '
+              [ $new | to_entries[] | .key as $k | .value as $v
+                | ( if ($old[$k].version // null) != $v.version
+                      then "Update \($k) to \($v.version)" else empty end ),
+                  ( if (($old[$k].cli.version) // null) != $v.cli.version
+                      then "Update \($k) to CLI \($v.cli.version)" else empty end )
+              ]
+              | join(", ")
+          ')"
+          if [ -z "$message" ]; then
+            message='Update Dockerfiles'
+          fi
+          echo "message=$message" >> "$GITHUB_OUTPUT"
+
+      - name: Print diff (dry run)
+        if: steps.inputs.outputs.dry_run == 'true'
+        run: git diff
+
+      - name: Commit and push changes
+        id: commit
+        if: steps.inputs.outputs.dry_run != 'true' && steps.changes.outputs.changed == 'true'
+        env:
+          COMMIT_MESSAGE: ${{ steps.message.outputs.message }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name 'Ghost-Slimer'
+          git config user.email 'ghost-slimer@users.noreply.github.com'
+          # authenticate via the credential helper (token stays in env, never on a command line)
+          gh auth setup-git
+          git add -A
+          git commit -m "$COMMIT_MESSAGE"
+          git push origin HEAD
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # bashbrew is required by generate-stackbrew-library.sh to resolve parent image arches
+      - name: Install Bashbrew
+        if: steps.inputs.outputs.dry_run != 'true' && steps.changes.outputs.changed == 'true' && steps.inputs.outputs.make_image_pr == 'true'
+        uses: ./.github/actions/bashbrew/
+
+      - name: Open official-images PR
+        if: steps.inputs.outputs.dry_run != 'true' && steps.changes.outputs.changed == 'true' && steps.inputs.outputs.make_image_pr == 'true'
+        # avoid -x here so the auth token is not echoed into the logs
+        shell: 'bash -Eeuo pipefail {0}'
+        env:
+          GH_TOKEN: ${{ secrets.OFFICIAL_IMAGES_PR_TOKEN }}
+          FORK_REPO: ${{ steps.inputs.outputs.official_images_fork_repo }}
+          COMMIT_MESSAGE: ${{ steps.message.outputs.message }}
+          HEAD_SHA: ${{ steps.commit.outputs.sha }}
+        run: |
+          # configure git to authenticate via the provided token (no token in URLs/logs)
+          gh auth setup-git
+
+          # make sure the fork's default branch is up to date with upstream before branching off it
+          gh repo sync "$FORK_REPO" --source docker-library/official-images --force
+
+          gh repo clone "$FORK_REPO" official-images
+          ./generate-stackbrew-library.sh > official-images/library/ghost
+
+          cd official-images
+          if git diff --quiet -- library/ghost; then
+            echo 'library/ghost is unchanged; skipping official-images push/PR.'
+            exit 0
+          fi
+
+          git config user.name 'Ghost-Slimer'
+          git config user.email 'ghost-slimer@users.noreply.github.com'
+          # always (re)create the update-ghost branch and force-push, overriding any existing one
+          git checkout -b update-ghost
+          git add library/ghost
+          git commit -m "$COMMIT_MESSAGE"
+          git push --force origin update-ghost
+
+          forkOwner="${FORK_REPO%%/*}"
+          if [ -n "$(gh pr list --repo docker-library/official-images --head "$forkOwner:update-ghost" --json number --jq '.[].number')" ]; then
+            echo "PR already exists for $forkOwner:update-ghost; force-pushed branch is enough."
+          else
+            gh pr create \
+              --repo docker-library/official-images \
+              --base master \
+              --head "$forkOwner:update-ghost" \
+              --title "$COMMIT_MESSAGE" \
+              --body "$COMMIT_MESSAGE"$'\n\n'"Generated from https://github.com/${GITHUB_REPOSITORY}/commit/${HEAD_SHA}."
+          fi
