@@ -86,7 +86,7 @@ RUN set -eux; \
 	\
 	# test that the optional dependencies are installed and loadable
 	cd current; \
-	gosu node node -e 'require("sqlite3"); if (!require("@tryghost/image-transform").canTransformFiles()) throw new Error("sharp not installed");'
+	gosu node node -e 'require("better-sqlite3"); if (!require("@tryghost/image-transform").canTransformFiles()) throw new Error("sharp not installed");'
 
 WORKDIR $GHOST_INSTALL
 VOLUME $GHOST_CONTENT
