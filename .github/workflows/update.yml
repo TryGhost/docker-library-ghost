@@ -28,7 +28,9 @@ jobs:
     name: Update Dockerfiles
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      # pushes to default branch are done with the custom PAT, configured below
+      # so we only need read here
+      contents: read
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -111,7 +113,8 @@ jobs:
         if: steps.inputs.outputs.dry_run != 'true' && steps.changes.outputs.changed == 'true'
         env:
           COMMIT_MESSAGE: ${{ steps.message.outputs.message }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # use custom token to ensure CI workflow is kicked off by the pushed commit
+          GH_TOKEN: ${{ secrets.OFFICIAL_IMAGES_PR_TOKEN }}
         run: |
           git config user.name 'Ghost-Slimer'
           git config user.email 'ghost-slimer@users.noreply.github.com'
