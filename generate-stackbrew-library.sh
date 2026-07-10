@@ -27,9 +27,7 @@ selfCommit="$(git log -1 --format='format:%H' HEAD -- "$self")"
 cat <<-EOH
 # this file is generated via https://github.com/TryGhost/docker-library-ghost/blob/$selfCommit/$self
 
-Maintainers: Tianon Gravi <admwiggin@gmail.com> (@tianon),
-             Joseph Ferguson <yosifkit@gmail.com> (@yosifkit),
-             Austin Burdine <austin@ghost.org> (@acburdine)
+Maintainers: Austin Burdine <austin@ghost.org> (@acburdine)
 GitRepo: https://github.com/TryGhost/docker-library-ghost.git
 GitCommit: $commit
 EOH
