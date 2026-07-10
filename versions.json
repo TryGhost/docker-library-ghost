@@ -2,7 +2,7 @@
   "6": {
     "version": "6.52.1",
     "cli": {
-      "version": "1.29.3"
+      "version": "1.30.0"
     },
     "node": {
       "version": "22"
