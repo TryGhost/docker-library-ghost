@@ -4,6 +4,13 @@ set -Eeuo pipefail
 cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
 
 [ -f versions.json ] # run "versions.sh" first
+[ -f ghost-cli/package-lock.json ] # run "update-ghost-cli-lock.sh" after "versions.sh"
+
+lockedCliVersion="$(jq -r '.packages["node_modules/ghost-cli"].version // empty' ghost-cli/package-lock.json)"
+if ! jq -e --arg cliVersion "$lockedCliVersion" 'all(.[]; .cli.version == $cliVersion)' versions.json > /dev/null; then
+	echo >&2 "error: ghost-cli/package-lock.json does not match versions.json; run ./update-ghost-cli-lock.sh"
+	exit 1
+fi
 
 jqt='.jq-template.awk'
 if [ -n "${BASHBREW_SCRIPTS:-}" ]; then
@@ -56,5 +63,7 @@ for version; do
 		} > "$dir/Dockerfile"
 
 		cp -a docker-entrypoint.sh "$dir/"
+		mkdir -p "$dir/ghost-cli"
+		cp -a ghost-cli/package.json ghost-cli/package-lock.json "$dir/ghost-cli/"
 	done
 done
