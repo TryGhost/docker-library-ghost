@@ -43,9 +43,13 @@ RUN set -eux; \
 ENV NODE_ENV production
 
 ENV GHOST_CLI_VERSION 1.30.1
+COPY ghost-cli /opt/ghost-cli
 RUN set -eux; \
 	corepack enable; \
-	npm install -g "ghost-cli@$GHOST_CLI_VERSION"; \
+	npm ci --prefix /opt/ghost-cli --omit=dev --ignore-scripts --no-audit --no-fund; \
+	[ "$(node -p "require('/opt/ghost-cli/node_modules/ghost-cli/package.json').version")" = "$GHOST_CLI_VERSION" ]; \
+	ln -s /opt/ghost-cli/node_modules/.bin/ghost /usr/local/bin/ghost; \
+	ghost --version; \
 	npm cache clean --force
 
 ENV GHOST_INSTALL /var/lib/ghost

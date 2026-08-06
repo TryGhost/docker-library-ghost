@@ -1,0 +1,7 @@
+{
+  "name": "ghost-cli-toolchain",
+  "private": true,
+  "dependencies": {
+    "ghost-cli": "1.30.1"
+  }
+}

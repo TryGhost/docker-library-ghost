@@ -1,1 +1,2 @@
 .jq-template.awk
+/ghost-cli/node_modules/
