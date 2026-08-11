@@ -12,7 +12,7 @@ RUN apk add --no-cache \
 
 # grab gosu for easy step-down from root
 # https://github.com/tianon/gosu/releases
-ENV GOSU_VERSION 1.19
+ENV GOSU_VERSION=1.19
 RUN set -eux; \
 	\
 	apk add --no-cache --virtual .gosu-deps \
@@ -40,18 +40,53 @@ RUN set -eux; \
 	gosu --version; \
 	gosu nobody true
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
-ENV GHOST_CLI_VERSION 1.30.1
+# Ghost-CLI is installed from source rather than "npm install -g ghost-cli" so that
+# pnpm can resolve the dependency tree from the lockfile committed alongside the tag
+# ("npm install -g" ignores lockfiles entirely, so the tree it produces varies by build date)
+ENV GHOST_CLI_VERSION=1.30.1
+ENV GHOST_CLI_SHA=6c711179d9669c1938aa506f92a82c602d6c202e
+ENV GHOST_CLI_INSTALL=/usr/local/lib/ghost-cli
 RUN set -eux; \
+	\
+	apk add --no-cache --virtual .ghost-cli-deps git; \
+	\
 	corepack enable; \
-	npm install -g "ghost-cli@$GHOST_CLI_VERSION"; \
-	npm cache clean --force
+	\
+# corepack's downloads, pnpm's metadata cache and pnpm's store all derive their location
+# from these, so pointing them at /tmp keeps every throwaway byte in one place
+	export XDG_CACHE_HOME=/tmp/xdg-cache XDG_DATA_HOME=/tmp/xdg-data; \
+	\
+	mkdir -p "$GHOST_CLI_INSTALL"; \
+	cd "$GHOST_CLI_INSTALL"; \
+	git init --quiet .; \
+	git remote add origin https://github.com/TryGhost/Ghost-CLI.git; \
+# fetching the commit by hash means git's own object verification pins the source
+# (a moved tag or a re-rolled release tarball cannot change what we get)
+	git fetch --quiet --depth 1 origin "$GHOST_CLI_SHA"; \
+	git checkout --quiet FETCH_HEAD; \
+	[ "$(node -p 'require("./package.json").version')" = "$GHOST_CLI_VERSION" ]; \
+	\
+# "--frozen-lockfile" is the point of all this: it installs pnpm-lock.yaml exactly, or fails
+	pnpm install --prod --frozen-lockfile; \
+	\
+	ln -s "$GHOST_CLI_INSTALL/bin/ghost" /usr/local/bin/ghost; \
+	\
+# drop what "npm publish" would not have shipped (see "files" in Ghost-CLI's package.json)
+	rm -rf .git test .github; \
+	\
+	apk del --no-network .ghost-cli-deps; \
+	\
+	rm -rf /tmp/xdg-cache /tmp/xdg-data; \
+	npm cache clean --force; \
+	\
+	ghost --version
 
-ENV GHOST_INSTALL /var/lib/ghost
-ENV GHOST_CONTENT /var/lib/ghost/content
+ENV GHOST_INSTALL=/var/lib/ghost
+ENV GHOST_CONTENT=/var/lib/ghost/content
 
-ENV GHOST_VERSION 6.57.1
+ENV GHOST_VERSION=6.57.1
 
 RUN set -eux; \
 	mkdir -p "$GHOST_INSTALL"; \
@@ -81,6 +116,9 @@ RUN set -eux; \
 	gosu node pnpm store prune; \
 	gosu node npm cache clean --force; \
 	npm cache clean --force; \
+# none of these are needed to run Ghost: corepack re-downloads pnpm on demand and node-gyp
+# only matters while compiling native modules, which is finished by this point
+	rm -rf /home/node/.cache/node/corepack /home/node/.cache/node-gyp /home/node/.cache/pnpm; \
 	\
 	# test that the optional dependencies are installed and loadable
 	cd current; \
