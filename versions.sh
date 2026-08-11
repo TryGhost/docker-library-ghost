@@ -18,13 +18,29 @@ allVersions="$(
 		| sort -ruV
 )"
 
+cliTags="$(git ls-remote --tags https://github.com/TryGhost/Ghost-CLI.git)"
+
 cliVersion="$(
-	git ls-remote --tags https://github.com/TryGhost/Ghost-CLI.git \
+	echo "$cliTags" \
 		| sed -rne 's!^.*\trefs/tags/v?|\^\{\}$!!g; /^[0-9][.][0-9]+/p' \
 		| grep -vE -- '-(alpha|beta|rc)' \
 		| sort -ruV \
 		| head -n1
 )"
+
+# the Dockerfile clones Ghost-CLI by commit hash so that git's own object verification pins
+# the source; prefer the peeled hash since these are annotated tags
+cliSha="$(
+	awk -v tag="refs/tags/v$cliVersion" '
+		$2 == tag "^{}" { peeled = $1 }
+		$2 == tag { direct = $1 }
+		END { print (peeled != "" ? peeled : direct) }
+	' <<<"$cliTags"
+)"
+if [ -z "$cliSha" ]; then
+	echo >&2 "error: cannot determine commit for Ghost-CLI 'v$cliVersion'"
+	exit 1
+fi
 
 for version in "${versions[@]}"; do
 	rcVersion="${version%-rc}"
@@ -83,7 +99,7 @@ for version in "${versions[@]}"; do
 		'
 	)"
 
-	export fullVersion cliVersion
+	export fullVersion cliVersion cliSha
 	json="$(jq <<<"$json" --compact-output --argjson doc "$doc" '
 		{
 			# https://docs.ghost.org/faq/node-versions
@@ -92,7 +108,7 @@ for version in "${versions[@]}"; do
 		}[env.version] as $nodeVersion
 		| .[env.version] = {
 			version: env.fullVersion,
-			cli: { version: env.cliVersion },
+			cli: { version: env.cliVersion, sha: env.cliSha },
 			node: { version: $nodeVersion },
 			variants: (
 				$doc

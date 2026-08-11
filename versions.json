@@ -2,7 +2,8 @@
   "6": {
     "version": "6.57.1",
     "cli": {
-      "version": "1.30.1"
+      "version": "1.30.1",
+      "sha": "6c711179d9669c1938aa506f92a82c602d6c202e"
     },
     "node": {
       "version": "22"
