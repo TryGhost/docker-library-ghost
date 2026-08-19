@@ -1,9 +1,9 @@
 {
   "6": {
-    "version": "6.58.0",
+    "version": "6.59.0",
     "cli": {
-      "version": "1.32.0",
-      "sha": "2881ea433a6bf753560f2d7e6146fef70d0bf092"
+      "version": "1.32.2",
+      "sha": "5e0b07b7619207459956dd9728bafc5cd7d15f01"
     },
     "node": {
       "version": "22"
