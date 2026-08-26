@@ -26,5 +26,33 @@
         "from": "node:22-alpine3.23"
       }
     }
+  },
+  "6-next": {
+    "version": "6.61.0",
+    "tarball": {
+      "url": "https://github.com/TryGhost/Ghost/releases/download/v6.61.0/ghost-6.61.0.tgz",
+      "sha256": "d7a4de32641979fd57fa98bd29c128e406aa5421f3dadc04ffe28cb96507e69c"
+    },
+    "node": {
+      "version": "22"
+    },
+    "variants": {
+      "bookworm": {
+        "arches": [
+          "amd64",
+          "arm32v7",
+          "arm64v8",
+          "s390x"
+        ],
+        "from": "node:22-bookworm-slim"
+      },
+      "alpine3.23": {
+        "arches": [
+          "amd64",
+          "arm64v8"
+        ],
+        "from": "node:22-alpine3.23"
+      }
+    }
   }
 }

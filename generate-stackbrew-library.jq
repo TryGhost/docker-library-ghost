@@ -1,6 +1,12 @@
+# "-rc" and "-next" are pseudo-majors: they ride along with an existing major rather than being one,
+# so neither can ever win "latest", and each gets its own tag shape below
+def isRc: endswith("-rc");
+def isNext: endswith("-next");
+def isPseudoMajor: isRc or isNext;
+
 to_entries
 # latest version is the first one since it is already in version order
-| first(.[] | select(.value and (.key | endswith("-rc") | not))) as $latestMajor
+| first(.[] | select(.value and (.key | isPseudoMajor | not))) as $latestMajor
 # latest suite of each variant in the latest version
 | first($latestMajor.value.variants | keys_unsorted[] | select(contains("alpine"))) as $latestAlpine
 | first($latestMajor.value.variants | keys_unsorted[] | select(contains("alpine") | not)) as $latestDebian
@@ -22,15 +28,19 @@ else . end
 | (
 	.version
 	# this is an RC, so don't explode the version
-	| if $majorVersion | endswith("-rc") then
+	| if $majorVersion | isRc then
 		[ ., $majorVersion ]
 	else
 		split(".")
 		# TODO if more than one minor of a major version is tracked (6.1 and 6.0), then this needs to be filtered when not the latest (so only one would get `6`)
 		| [ foreach .[] as $c ([]; .+=[$c]) | join(".") ]
 		| reverse
+		# "-next" explodes like a normal version, but every tag carries the suffix, plus a bare "next"
+		# e.g. "6.57.1-next", "6.57-next", "6-next", "next"
+		| if $majorVersion | isNext then
+			map(. + "-next") + [ "next" ]
 		# add plain variant/latest if this is the newest version
-		| if $majorVersion == $latestMajor then
+		elif $majorVersion == $latestMajor then
 			. + [ "" ] # empty for plain variant tag and latest
 		else . end
 	end
@@ -73,5 +83,6 @@ else . end
 	"Tags: \($tags | join(", "))",
 	"Directory: \($majorVersion)/\($variant)",
 	"Architectures: \(.arches - (.arches - $parentArches[.from]) | join(", "))",
+	(if $majorVersion | isNext then "Builder: buildkit" else empty end),
 	empty
 )

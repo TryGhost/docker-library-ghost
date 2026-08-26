@@ -50,7 +50,28 @@ for version in "${versions[@]}"; do
 	fi
 	rcGrepV+=' -E'
 	rcGrepExpr='alpha|beta|rc'
+
+	# "-next" previews the Ghost 7.0 image structure (no Ghost-CLI, install at /home/ghost) but
+	# tracks the same stable upstream releases as its plain major, so it is stripped after the
+	# prerelease decision above rather than before it
+	nextVersion="${rcVersion%-next}"
+	isNext=
+	if [ "$nextVersion" != "$rcVersion" ]; then
+		isNext=1
+	fi
+	rcVersion="$nextVersion"
+
 	export version
+
+	# https://docs.ghost.org/faq/node-versions
+	# https://github.com/nodejs/Release (looking for "LTS")
+	case "$rcVersion" in
+		6) nodeVersion='22' ;;
+		*)
+			echo >&2 "error: unknown node version for '$version'"
+			exit 1
+			;;
+	esac
 
 	fullVersion="$(
 		echo "$allVersions" \
@@ -99,28 +120,64 @@ for version in "${versions[@]}"; do
 		'
 	)"
 
-	export fullVersion cliVersion cliSha
-	json="$(jq <<<"$json" --compact-output --argjson doc "$doc" '
-		{
-			# https://docs.ghost.org/faq/node-versions
-			# https://github.com/nodejs/Release (looking for "LTS")
-			"6": "22",
-		}[env.version] as $nodeVersion
-		| .[env.version] = {
-			version: env.fullVersion,
-			cli: { version: env.cliVersion, sha: env.cliSha },
-			node: { version: $nodeVersion },
-			variants: (
-				$doc
-				| with_entries(
-					# add image FROM for Dockerfile template and parent arch lookup in generate-stackbrew-library.sh
-					# e.g. "node:22-alpine3.23" or "node:22-trixie-slim"
-					.value.from = "node:\($nodeVersion)-\(.key)\(
-						if .key | startswith("alpine") then "" else "-slim" end
-					)"
-				)
-			),
-		}
+	# the "-next" image installs Ghost from the release tarball attached to the GitHub tag instead of
+	# via Ghost-CLI, so pin the exact artifact and its hash rather than re-resolving at build time.
+	# These assets start at 6.60.0; anything older has no tarball to install from.
+	if [ -n "$isNext" ]; then
+		tarballName="ghost-$fullVersion.tgz"
+		releaseJson="$(curl -fsSL "https://api.github.com/repos/TryGhost/Ghost/releases/tags/v$fullVersion")"
+		tarballUrl="$(jq <<<"$releaseJson" --raw-output --arg name "$tarballName" '
+			.assets[]? | select(.name == $name) | .browser_download_url // empty
+		')"
+		tarballDigest="$(jq <<<"$releaseJson" --raw-output --arg name "$tarballName" '
+			.assets[]? | select(.name == $name) | .digest // empty
+		')"
+		if [ -z "$tarballUrl" ]; then
+			echo >&2 "error: the GitHub release for 'v$fullVersion' has no '$tarballName' asset (these start at 6.60.0)"
+			exit 1
+		fi
+
+		# GitHub reports the asset digest as "sha256:<hex>"; refuse anything else rather than
+		# writing a hash the Dockerfile would then check with the wrong algorithm
+		case "$tarballDigest" in
+			sha256:?*) tarballSha256="${tarballDigest#sha256:}" ;;
+			*)
+				echo >&2 "error: unexpected digest '$tarballDigest' for '$tarballName'; update versions.sh"
+				exit 1
+				;;
+		esac
+
+		sourceJson="$(jq --null-input --compact-output \
+			--arg url "$tarballUrl" \
+			--arg sha256 "$tarballSha256" \
+			'{ tarball: { url: $url, sha256: $sha256 } }')"
+	else
+		sourceJson="$(jq --null-input --compact-output \
+			--arg version "$cliVersion" \
+			--arg sha "$cliSha" \
+			'{ cli: { version: $version, sha: $sha } }')"
+	fi
+
+	export fullVersion nodeVersion
+	json="$(jq <<<"$json" --compact-output --argjson doc "$doc" --argjson source "$sourceJson" '
+		env.nodeVersion as $nodeVersion
+		| .[env.version] = (
+			{ version: env.fullVersion }
+			+ $source
+			+ {
+				node: { version: $nodeVersion },
+				variants: (
+					$doc
+					| with_entries(
+						# add image FROM for Dockerfile template and parent arch lookup in generate-stackbrew-library.sh
+						# e.g. "node:22-alpine3.23" or "node:22-trixie-slim"
+						.value.from = "node:\($nodeVersion)-\(.key)\(
+							if .key | startswith("alpine") then "" else "-slim" end
+						)"
+					)
+				),
+			}
+		)
 	')"
 done
 
@@ -128,7 +185,15 @@ jq <<<"$json" '
 	to_entries
 
 	# sort by version number, descending
-	| sort_by(.value.version | split("[.-]"; "") | map(tonumber? // .))
+	| sort_by([
+		(.value.version | split("[.-]"; "") | map(tonumber? // .)),
+
+		# a pseudo-major ("6-next") tracks the same upstream release as its plain major, so the
+		# version alone ties; break it explicitly instead of inheriting whatever order
+		# versions.json already happened to have (sorted ascending here, so the plain major needs
+		# the higher value to land first once this is reversed)
+		(if .key | test("-(rc|next)$") then 0 else 1 end)
+	])
 	| reverse
 
 	| from_entries
