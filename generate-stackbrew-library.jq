@@ -83,6 +83,5 @@ else . end
 	"Tags: \($tags | join(", "))",
 	"Directory: \($majorVersion)/\($variant)",
 	"Architectures: \(.arches - (.arches - $parentArches[.from]) | join(", "))",
-	(if $majorVersion | isNext then "Builder: buildkit" else empty end),
 	empty
 )
