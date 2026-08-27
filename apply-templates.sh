@@ -42,6 +42,23 @@ for version; do
 	variants="$(jq -r '.[env.version].variants | keys_unsorted | map(@sh) | join(" ")' versions.json)"
 	eval "variants=( $variants )"
 
+	# "-next" has its own template: multi-stage, no Ghost-CLI, install at /home/ghost, and a
+	# checked-in baseline config (Ghost-CLI used to generate one)
+	template='Dockerfile.template'
+	entrypoint='docker-entrypoint.sh'
+	config=
+	if [ "$version" != "${version%-next}" ]; then
+		template='Dockerfile-next.template'
+		entrypoint='docker-entrypoint-next.sh'
+		config='config-next.json'
+	fi
+	for f in "$template" "$entrypoint" ${config:+"$config"}; do
+		if [ ! -f "$f" ]; then
+			echo >&2 "error: '$version' needs '$f', which does not exist yet"
+			exit 1
+		fi
+	done
+
 	for variant in "${variants[@]}"; do
 		export variant
 
@@ -52,9 +69,12 @@ for version; do
 
 		{
 			generated_warning
-			gawk -f "$jqt" Dockerfile.template
+			gawk -f "$jqt" "$template"
 		} > "$dir/Dockerfile"
 
-		cp -a docker-entrypoint.sh "$dir/"
+		cp -a "$entrypoint" "$dir/docker-entrypoint.sh"
+		if [ -n "$config" ]; then
+			cp -a "$config" "$dir/config.production.json"
+		fi
 	done
 done
