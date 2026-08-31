@@ -77,7 +77,9 @@ fi
 
 # allow the container to be started with `--user`
 if [ -n "$isGhost" ] && [ "$(id -u)" = '0' ]; then
-	find "$GHOST_CONTENT" \! -user ghost -exec chown ghost '{}' +
+	# -h: ghost:6 seeded its bundled themes as symlinks into /var/lib/ghost, which does not
+	# exist here. Without it chown follows them, fails on the missing target, and set -e aborts.
+	find "$GHOST_CONTENT" \! -user ghost -exec chown -h ghost '{}' +
 	exec gosu ghost "$0" "$@"
 fi
 
@@ -87,6 +89,12 @@ if [ -n "$isGhost" ]; then
 		src="${src%/}"
 		target="$GHOST_CONTENT/${src#$baseDir/}"
 		mkdir -p "$(dirname "$target")"
+		# those same dangling theme symlinks are not "-e", so the seed below would run and tar
+		# would extract *through* the symlink instead of replacing it. Drop them first. Guarded on
+		# broken-only so a user's own valid symlinked theme is left alone.
+		if [ -L "$target" ] && [ ! -e "$target" ]; then
+			rm -f "$target"
+		fi
 		if [ ! -e "$target" ]; then
 			tar -cC "$(dirname "$src")" "$(basename "$src")" | tar -xC "$(dirname "$target")"
 		fi
