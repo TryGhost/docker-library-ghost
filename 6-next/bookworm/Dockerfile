@@ -49,11 +49,11 @@ ENV NODE_ENV=production
 ENV GHOST_INSTALL=/home/ghost
 ENV GHOST_CONTENT=/home/ghost/content
 
-ENV GHOST_VERSION=6.61.0
+ENV GHOST_VERSION=6.62.0
 
 # resolved by "versions.sh" so a build cannot pick up a different tarball than the one reviewed
-ENV GHOST_TARBALL=https://github.com/TryGhost/Ghost/releases/download/v6.61.0/ghost-6.61.0.tgz
-ENV GHOST_SHA256=d7a4de32641979fd57fa98bd29c128e406aa5421f3dadc04ffe28cb96507e69c
+ENV GHOST_TARBALL=https://github.com/TryGhost/Ghost/releases/download/v6.62.0/ghost-6.62.0.tgz
+ENV GHOST_SHA256=3f81079d07e2f6fd0365fbc0846b134c12b202dc5fe62b3252cb6ee34fa5c9e3
 
 RUN set -eux; \
 	savedAptMark="$(apt-mark showmanual)"; \
