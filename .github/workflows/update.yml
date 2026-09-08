@@ -206,3 +206,47 @@ jobs:
               --title "$COMMIT_MESSAGE" \
               --body "$COMMIT_MESSAGE"$'\n\n'"Generated from https://github.com/${GITHUB_REPOSITORY}/commit/${HEAD_SHA}."
           fi
+
+      # surface failures in Slack — this workflow runs unattended on
+      # repository_dispatch, so a broken run would otherwise go unnoticed.
+      # configure the SLACK_WEBHOOK_URL secret (an incoming webhook) to enable;
+      # the step no-ops when it is unset
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK_URL != ''
+        # avoid -x here so the webhook URL is not echoed into the logs
+        shell: 'bash -Eeuo pipefail {0}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_NUMBER: ${{ github.run_number }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          # empty when the run failed before the message was computed
+          COMMIT_MESSAGE: ${{ steps.message.outputs.message }}
+        run: |
+          # a webhook secret set to a plaintext URL would put the credential on the wire
+          if [ "${SLACK_WEBHOOK_URL#https://}" = "$SLACK_WEBHOOK_URL" ]; then
+            echo >&2 'error: SLACK_WEBHOOK_URL must be an https:// URL'
+            exit 1
+          fi
+
+          jq --null-input \
+            --arg run_url "$RUN_URL" \
+            --arg run_number "$RUN_NUMBER" \
+            --arg event "$EVENT_NAME" \
+            --arg repo "$REPOSITORY" \
+            --arg commit_message "${COMMIT_MESSAGE:-}" '
+              ":x: *<\($run_url)|Update Dockerfiles failed>* in `\($repo)`"
+                + "\n_event_ `\($event)` · _run_ `#\($run_number)`"
+                + (if $commit_message == "" then "" else "\n_update_ `\($commit_message)`" end)
+              | {
+                  text: "Update Dockerfiles failed in \($repo) (run #\($run_number))",
+                  blocks: [ { type: "section", text: { type: "mrkdwn", text: . } } ]
+                }
+            ' \
+            | curl --silent --show-error --fail-with-body \
+                --connect-timeout 10 \
+                --max-time 30 \
+                --header 'Content-Type: application/json' \
+                --data @- \
+                "$SLACK_WEBHOOK_URL"

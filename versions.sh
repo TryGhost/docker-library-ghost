@@ -3,6 +3,37 @@ set -Eeuo pipefail
 
 cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
 
+retryAttempts=6
+
+# the ghost-version-publish dispatch fires as soon as the tag lands upstream, which is seconds
+# before raw.githubusercontent.com serves that tag and before the GitHub release (and its
+# assets) are published; retry these fetches instead of failing the whole update run on the race
+#
+# $1: url
+# $2: optional jq filter that must produce output before the response counts as ready -- a
+#     release goes live seconds before its assets finish uploading, so HTTP 200 is not on its
+#     own proof that what we came for is in the body
+fetch() {
+	local url="$1" filter="${2-}" attempt body reason
+	for (( attempt = 1; attempt <= retryAttempts; attempt++ )); do
+		# capture per attempt so a partial body from a failed one is never emitted
+		# without a deadline a stalled connection would hang here instead of retrying
+		if ! body="$(curl -fsSL --connect-timeout 10 --max-time 120 "$url")"; then
+			reason='request failed'
+		elif [ -n "$filter" ] && [ -z "$(jq --raw-output "$filter" <<<"$body")" ]; then
+			reason='response is missing what we need'
+		else
+			printf '%s\n' "$body"
+			return 0
+		fi
+		echo >&2 "warning: $url: $reason (attempt $attempt/$retryAttempts)"
+		if [ "$attempt" -lt "$retryAttempts" ]; then
+			sleep "${attempt}0"
+		fi
+	done
+	return 1
+}
+
 versions=( "$@" )
 if [ ${#versions[@]} -eq 0 ]; then
 	versions=( */ )
@@ -86,7 +117,7 @@ for version in "${versions[@]}"; do
 
 	# get a list of architectures supported by the sharp module's prebuilt libraries
 	# we cannot build it on other arches since the dep, libvips, is usually too old in Debian and Alpine
-	doc="$(curl -fsSL "https://raw.githubusercontent.com/TryGhost/Ghost/refs/tags/v$fullVersion/pnpm-lock.yaml" \
+	doc="$(fetch "https://raw.githubusercontent.com/TryGhost/Ghost/refs/tags/v$fullVersion/pnpm-lock.yaml" \
 		| jq --compact-output --raw-input --null-input '
 			reduce (
 				inputs
@@ -125,17 +156,23 @@ for version in "${versions[@]}"; do
 	# These assets start at 6.60.0; anything older has no tarball to install from.
 	if [ -n "$isNext" ]; then
 		tarballName="ghost-$fullVersion.tgz"
-		releaseJson="$(curl -fsSL "https://api.github.com/repos/TryGhost/Ghost/releases/tags/v$fullVersion")"
+		# read by the readiness filter below; passing it through the environment keeps the asset
+		# name out of the jq program text
+		export tarballName
+		if ! releaseJson="$(fetch \
+			"https://api.github.com/repos/TryGhost/Ghost/releases/tags/v$fullVersion" \
+			'.assets[]? | select(.name == env.tarballName) | .browser_download_url // empty' \
+		)"; then
+			echo >&2 "error: the GitHub release for 'v$fullVersion' has no '$tarballName' asset (these start at 6.60.0)"
+			exit 1
+		fi
+		# guaranteed non-empty: fetch only returns once the filter above matches
 		tarballUrl="$(jq <<<"$releaseJson" --raw-output --arg name "$tarballName" '
 			.assets[]? | select(.name == $name) | .browser_download_url // empty
 		')"
 		tarballDigest="$(jq <<<"$releaseJson" --raw-output --arg name "$tarballName" '
 			.assets[]? | select(.name == $name) | .digest // empty
 		')"
-		if [ -z "$tarballUrl" ]; then
-			echo >&2 "error: the GitHub release for 'v$fullVersion' has no '$tarballName' asset (these start at 6.60.0)"
-			exit 1
-		fi
 
 		# GitHub reports the asset digest as "sha256:<hex>"; refuse anything else rather than
 		# writing a hash the Dockerfile would then check with the wrong algorithm
