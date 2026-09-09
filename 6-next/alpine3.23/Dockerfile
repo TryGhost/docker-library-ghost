@@ -50,8 +50,20 @@ ENV GHOST_TARBALL=https://github.com/TryGhost/Ghost/releases/download/v6.63.0/gh
 ENV GHOST_SHA256=20b2ac6e936299d5b88b37d2a7175712ad35e6ade78a594ab6d495256ab54292
 
 RUN set -eux; \
-# Ghost pins its pnpm by hash in "packageManager", so corepack fetches exactly that one
-	corepack enable; \
+# Ghost pins its pnpm by hash in "packageManager", so corepack fetches exactly that one -- except on
+# arm32v7, where pnpm 12 is a Rust binary with no 32-bit ARM target and no JavaScript fallback.
+# pnpm 11 is the last JavaScript implementation and reads the same lockfile format
+	if [ "$(node -p 'process.arch')" = 'arm' ]; then \
+# yarn still goes to corepack so "rm -rf /opt/yarn-*" below does not leave its symlinks dangling
+		corepack enable yarn; \
+		npm install -g 'pnpm@11.26.0'; \
+	else \
+		corepack enable; \
+	fi; \
+	\
+# pnpm 11 would otherwise honour "packageManager" and switch back to the binary it cannot run.
+# Inert under corepack, which owns version switching; exported so it survives the "gosu ghost" drop
+	export pnpm_config_pm_on_fail=ignore; \
 	\
 # everything under the install dir is created by "ghost" rather than chowned afterwards: a recursive
 # chown would copy the whole tree into a new layer

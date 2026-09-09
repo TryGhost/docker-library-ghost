@@ -51,7 +51,18 @@ RUN set -eux; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends ca-certificates git; \
 	\
-	corepack enable; \
+# pnpm 12 is a Rust binary with no 32-bit ARM target and no JavaScript fallback, so corepack cannot
+# produce the version "packageManager" pins on arm32v7. pnpm 11 is the last JavaScript
+# implementation and reads the same lockfile format, so that arch installs with it instead
+	if [ "$(node -p 'process.arch')" = 'arm' ]; then \
+		npm install -g 'pnpm@11.26.0'; \
+	else \
+		corepack enable; \
+	fi; \
+	\
+# pnpm 11 would otherwise honour "packageManager" and switch back to the binary it cannot run;
+# exported because Ghost-CLI spawns pnpm itself. Inert under corepack, which owns version switching
+	export pnpm_config_pm_on_fail=ignore; \
 	\
 # corepack's downloads, pnpm's metadata cache and pnpm's store all derive their location
 # from these, so pointing them at /tmp keeps every throwaway byte in one place
@@ -93,6 +104,9 @@ ENV GHOST_VERSION=6.63.0
 RUN set -eux; \
 	mkdir -p "$GHOST_INSTALL"; \
 	chown node:node "$GHOST_INSTALL"; \
+	\
+# "ghost install" and "pnpm store prune" below both run pnpm; see the note in the Ghost-CLI stage
+	export pnpm_config_pm_on_fail=ignore; \
 	\
 	savedAptMark="$(apt-mark showmanual)"; \
 	apt-get update; \

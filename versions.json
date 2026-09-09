@@ -8,6 +8,9 @@
     "node": {
       "version": "22"
     },
+    "pnpm": {
+      "fallbackVersion": "11.26.0"
+    },
     "variants": {
       "bookworm": {
         "arches": [
@@ -35,6 +38,9 @@
     },
     "node": {
       "version": "22"
+    },
+    "pnpm": {
+      "fallbackVersion": "11.26.0"
     },
     "variants": {
       "bookworm": {

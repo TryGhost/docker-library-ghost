@@ -73,6 +73,17 @@ if [ -z "$cliSha" ]; then
 	exit 1
 fi
 
+# pnpm 12 is a Rust binary and publishes no 32-bit ARM target, and unlike every pnpm before it
+# there is no JavaScript implementation to fall back to -- the npm package is a downloader that
+# fetches "@pnpm/exe.<platform>-<arch>". So corepack cannot produce the version "packageManager"
+# pins when building for arm32v7. pnpm 11 is the last JavaScript implementation, is still released
+# alongside 12 ("latest-11"), and reads the same lockfile format, so that architecture builds with
+# it instead. Pinned here so it is refreshed by the update workflow like every other version.
+pnpmFallbackVersion="$(
+	fetch 'https://registry.npmjs.org/pnpm' '."dist-tags"."latest-11" // empty' \
+		| jq --raw-output '."dist-tags"."latest-11"'
+)"
+
 for version in "${versions[@]}"; do
 	rcVersion="${version%-rc}"
 	rcGrepV='-v'
@@ -195,7 +206,7 @@ for version in "${versions[@]}"; do
 			'{ cli: { version: $version, sha: $sha } }')"
 	fi
 
-	export fullVersion nodeVersion
+	export fullVersion nodeVersion pnpmFallbackVersion
 	json="$(jq <<<"$json" --compact-output --argjson doc "$doc" --argjson source "$sourceJson" '
 		env.nodeVersion as $nodeVersion
 		| .[env.version] = (
@@ -203,6 +214,7 @@ for version in "${versions[@]}"; do
 			+ $source
 			+ {
 				node: { version: $nodeVersion },
+				pnpm: { fallbackVersion: env.pnpmFallbackVersion },
 				variants: (
 					$doc
 					| with_entries(
