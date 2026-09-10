@@ -16,8 +16,7 @@
         "arches": [
           "amd64",
           "arm32v7",
-          "arm64v8",
-          "s390x"
+          "arm64v8"
         ],
         "from": "node:22-bookworm-slim"
       },
@@ -39,16 +38,11 @@
     "node": {
       "version": "22"
     },
-    "pnpm": {
-      "fallbackVersion": "11.26.0"
-    },
     "variants": {
       "bookworm": {
         "arches": [
           "amd64",
-          "arm32v7",
-          "arm64v8",
-          "s390x"
+          "arm64v8"
         ],
         "from": "node:22-bookworm-slim"
       },

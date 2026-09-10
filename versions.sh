@@ -79,6 +79,7 @@ fi
 # pins when building for arm32v7. pnpm 11 is the last JavaScript implementation, is still released
 # alongside 12 ("latest-11"), and reads the same lockfile format, so that architecture builds with
 # it instead. Pinned here so it is refreshed by the update workflow like every other version.
+# Only the Ghost-CLI image needs it: "-next" does not build arm32v7 at all (see below).
 pnpmFallbackVersion="$(
 	fetch 'https://registry.npmjs.org/pnpm' '."dist-tags"."latest-11" // empty' \
 		| jq --raw-output '."dist-tags"."latest-11"'
@@ -153,7 +154,7 @@ for version in "${versions[@]}"; do
 							x64: "amd64",
 							arm64: "arm64v8",
 							arm: "arm32v7",
-							s390x: "s390x",
+							# no s390x: sharp ships a prebuilt for it, but the node:22 images publish none to build on
 						}[.] // empty) # TODO maybe warn/error on unexpected values?
 						| sort
 					)
@@ -206,21 +207,25 @@ for version in "${versions[@]}"; do
 			'{ cli: { version: $version, sha: $sha } }')"
 	fi
 
-	export fullVersion nodeVersion pnpmFallbackVersion
+	export fullVersion nodeVersion pnpmFallbackVersion isNext
 	json="$(jq <<<"$json" --compact-output --argjson doc "$doc" --argjson source "$sourceJson" '
 		env.nodeVersion as $nodeVersion
 		| .[env.version] = (
 			{ version: env.fullVersion }
 			+ $source
+			+ { node: { version: $nodeVersion } }
+			+ (if env.isNext == "" then { pnpm: { fallbackVersion: env.pnpmFallbackVersion } } else {} end)
 			+ {
-				node: { version: $nodeVersion },
-				pnpm: { fallbackVersion: env.pnpmFallbackVersion },
 				variants: (
 					$doc
 					| with_entries(
+						# "-next" previews the Ghost 7.0 image, which drops arm32v7: pnpm 12 has no 32-bit ARM
+						# build, and carrying the pnpm 11 fallback into a new image is not worth it
+						if env.isNext != "" then .value.arches -= [ "arm32v7" ] else . end
+
 						# add image FROM for Dockerfile template and parent arch lookup in generate-stackbrew-library.sh
 						# e.g. "node:22-alpine3.23" or "node:22-trixie-slim"
-						.value.from = "node:\($nodeVersion)-\(.key)\(
+						| .value.from = "node:\($nodeVersion)-\(.key)\(
 							if .key | startswith("alpine") then "" else "-slim" end
 						)"
 					)
