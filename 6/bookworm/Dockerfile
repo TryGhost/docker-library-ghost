@@ -55,7 +55,7 @@ RUN set -eux; \
 # produce the version "packageManager" pins on arm32v7. pnpm 11 is the last JavaScript
 # implementation and reads the same lockfile format, so that arch installs with it instead
 	if [ "$(node -p 'process.arch')" = 'arm' ]; then \
-		npm install -g 'pnpm@11.26.0'; \
+		npm install -g 'pnpm@11.27.1'; \
 	else \
 		corepack enable; \
 	fi; \
@@ -99,7 +99,7 @@ RUN set -eux; \
 ENV GHOST_INSTALL=/var/lib/ghost
 ENV GHOST_CONTENT=/var/lib/ghost/content
 
-ENV GHOST_VERSION=6.64.0
+ENV GHOST_VERSION=6.65.0
 
 RUN set -eux; \
 	mkdir -p "$GHOST_INSTALL"; \
