@@ -45,8 +45,8 @@ ENV NODE_ENV=production
 # Ghost-CLI is installed from source rather than "npm install -g ghost-cli" so that
 # pnpm can resolve the dependency tree from the lockfile committed alongside the tag
 # ("npm install -g" ignores lockfiles entirely, so the tree it produces varies by build date)
-ENV GHOST_CLI_VERSION=1.32.5
-ENV GHOST_CLI_SHA=fc075c355680270c6dfb62af4120ea0a29299280
+ENV GHOST_CLI_VERSION=1.33.1
+ENV GHOST_CLI_SHA=cd09f6b38c0fd5b381e80d83f27c97e68b358783
 ENV GHOST_CLI_INSTALL=/usr/local/lib/ghost-cli
 RUN set -eux; \
 	\
@@ -97,7 +97,7 @@ RUN set -eux; \
 ENV GHOST_INSTALL=/var/lib/ghost
 ENV GHOST_CONTENT=/var/lib/ghost/content
 
-ENV GHOST_VERSION=6.67.0
+ENV GHOST_VERSION=6.68.0
 
 RUN set -eux; \
 	mkdir -p "$GHOST_INSTALL"; \
