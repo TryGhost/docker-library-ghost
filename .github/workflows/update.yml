@@ -136,6 +136,46 @@ jobs:
         if: steps.inputs.outputs.dry_run == 'true'
         run: git diff
 
+      # the ghost-version-publish dispatch can arrive before the new Ghost version
+      # is installable from npm (the registry and its CDN lag the publish), and
+      # the Ghost-CLI images run "ghost install <version>" against npm at build
+      # time; pushing the commit (which kicks off this repo's CI) or opening the
+      # upstream PR before then just fails CI.
+      # the "-next" images install from the GitHub release tarball instead, which
+      # versions.sh already waits for, so only versions with a .cli pin are checked
+      - name: Wait for Ghost on npm
+        if: steps.inputs.outputs.dry_run != 'true' && (steps.changes.outputs.changed == 'true' || steps.inputs.outputs.make_image_pr == 'true')
+        timeout-minutes: 35
+        run: |
+          deadline=$(( SECONDS + 30 * 60 ))
+          for version in $(jq --raw-output '[ .[] | select(has("cli")) | .version ] | unique[]' versions.json); do
+            export version
+            until (
+              # check both packument flavors: npm clients request the abbreviated
+              # one, others the full one, and each is cached independently
+              for accept in 'application/vnd.npm.install-v1+json' 'application/json'; do
+                tarball="$(
+                  curl -fsSL --connect-timeout 10 --max-time 60 \
+                    --header "Accept: $accept" \
+                    --header 'Cache-Control: no-cache' \
+                    'https://registry.npmjs.org/ghost' \
+                    | jq --raw-output '.versions[env.version].dist.tarball // empty'
+                )"
+                [ -n "$tarball" ] || exit 1
+              done
+              # the tarball is served separately from the metadata
+              curl -fsSL --head --connect-timeout 10 --max-time 60 "$tarball" > /dev/null
+            ); do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo >&2 "error: ghost@$version is still not available on npm; re-run this workflow once it is"
+                exit 1
+              fi
+              echo "ghost@$version is not available on npm yet; waiting..."
+              sleep 30
+            done
+            echo "ghost@$version is available on npm."
+          done
+
       - name: Commit and push changes
         id: commit
         if: steps.inputs.outputs.dry_run != 'true' && steps.changes.outputs.changed == 'true'
