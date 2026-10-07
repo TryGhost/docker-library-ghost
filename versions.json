@@ -1,6 +1,6 @@
 {
   "6": {
-    "version": "6.68.0",
+    "version": "6.69.0",
     "cli": {
       "version": "1.33.1",
       "sha": "cd09f6b38c0fd5b381e80d83f27c97e68b358783"
@@ -30,10 +30,10 @@
     }
   },
   "6-next": {
-    "version": "6.68.0",
+    "version": "6.69.0",
     "tarball": {
-      "url": "https://github.com/TryGhost/Ghost/releases/download/v6.68.0/ghost-6.68.0.tgz",
-      "sha256": "3aaffcb8c06f06206ac6a7a277bf1b115cf0b0c084debe216bff31d5ba996b50"
+      "url": "https://github.com/TryGhost/Ghost/releases/download/v6.69.0/ghost-6.69.0.tgz",
+      "sha256": "35bc0147ab3399c81da3a6acc401a2e48aab09f40305930a1e235f5254c7d22e"
     },
     "node": {
       "version": "22"
