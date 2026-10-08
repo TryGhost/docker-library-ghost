@@ -45,8 +45,8 @@ ENV NODE_ENV=production
 # Ghost-CLI is installed from source rather than "npm install -g ghost-cli" so that
 # pnpm can resolve the dependency tree from the lockfile committed alongside the tag
 # ("npm install -g" ignores lockfiles entirely, so the tree it produces varies by build date)
-ENV GHOST_CLI_VERSION=1.33.1
-ENV GHOST_CLI_SHA=cd09f6b38c0fd5b381e80d83f27c97e68b358783
+ENV GHOST_CLI_VERSION=1.33.2
+ENV GHOST_CLI_SHA=a8cfe4e621a274144137e3646b097a19eb78cfca
 ENV GHOST_CLI_INSTALL=/usr/local/lib/ghost-cli
 RUN set -eux; \
 	\
@@ -114,6 +114,8 @@ RUN set -eux; \
 	cd "$GHOST_INSTALL"; \
 	gosu node ghost config --no-prompt --ip '::' --port 2368 --url 'http://localhost:2368'; \
 	gosu node ghost config paths.contentPath "$GHOST_CONTENT"; \
+# in-development tables are for working on Ghost itself, not for running it (and NODE_ENV=development turns them on by default)
+	gosu node node -e 'const fs = require("fs"); const f = "config.production.json"; const c = JSON.parse(fs.readFileSync(f)); c.createInDevelopmentTables = false; fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");'; \
 	\
 # make a config.json symlink for NODE_ENV=development (and sanity check that it's correct)
 	gosu node ln -s config.production.json "$GHOST_INSTALL/config.development.json"; \
