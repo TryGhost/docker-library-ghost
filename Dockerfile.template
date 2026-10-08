@@ -153,6 +153,8 @@ RUN set -eux; \
 	cd "$GHOST_INSTALL"; \
 	gosu node ghost config --no-prompt --ip '::' --port 2368 --url 'http://localhost:2368'; \
 	gosu node ghost config paths.contentPath "$GHOST_CONTENT"; \
+# in-development tables are for working on Ghost itself, not for running it (and NODE_ENV=development turns them on by default)
+	gosu node node -e 'const fs = require("fs"); const f = "config.production.json"; const c = JSON.parse(fs.readFileSync(f)); c.createInDevelopmentTables = false; fs.writeFileSync(f, JSON.stringify(c, null, 2) + "\n");'; \
 	\
 # make a config.json symlink for NODE_ENV=development (and sanity check that it's correct)
 	gosu node ln -s config.production.json "$GHOST_INSTALL/config.development.json"; \
