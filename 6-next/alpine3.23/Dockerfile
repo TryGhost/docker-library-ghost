@@ -43,11 +43,11 @@ ENV NODE_ENV=production
 ENV GHOST_INSTALL=/home/ghost
 ENV GHOST_CONTENT=/home/ghost/content
 
-ENV GHOST_VERSION=6.70.0
+ENV GHOST_VERSION=6.71.0
 
 # resolved by "versions.sh" so a build cannot pick up a different tarball than the one reviewed
-ENV GHOST_TARBALL=https://github.com/TryGhost/Ghost/releases/download/v6.70.0/ghost-6.70.0.tgz
-ENV GHOST_SHA256=5eeb5e8b1c70a30c20a42fb740bf5d7dcd604418e9f0d57608247a56e8cccffa
+ENV GHOST_TARBALL=https://github.com/TryGhost/Ghost/releases/download/v6.71.0/ghost-6.71.0.tgz
+ENV GHOST_SHA256=0515a7dee4e4071923b2572dc33b6eb9b3efc4f1c9d7c97375819c75a10a6706
 
 RUN set -eux; \
 # Ghost pins its pnpm by hash in "packageManager", so corepack fetches exactly that one
