@@ -1,15 +1,15 @@
 {
   "6": {
-    "version": "6.71.0",
+    "version": "6.72.0",
     "cli": {
-      "version": "1.33.6",
-      "sha": "92ffc276fa05cc6831ccd9d8027a8658e85d7aa7"
+      "version": "1.33.7",
+      "sha": "dbb445aa281f3927241aa896da4b8ea8043006e8"
     },
     "node": {
       "version": "22"
     },
     "pnpm": {
-      "fallbackVersion": "11.28.2"
+      "fallbackVersion": "11.28.6"
     },
     "variants": {
       "bookworm": {
@@ -30,10 +30,10 @@
     }
   },
   "6-next": {
-    "version": "6.71.0",
+    "version": "6.72.0",
     "tarball": {
-      "url": "https://github.com/TryGhost/Ghost/releases/download/v6.71.0/ghost-6.71.0.tgz",
-      "sha256": "0515a7dee4e4071923b2572dc33b6eb9b3efc4f1c9d7c97375819c75a10a6706"
+      "url": "https://github.com/TryGhost/Ghost/releases/download/v6.72.0/ghost-6.72.0.tgz",
+      "sha256": "d2865b2cb625f64159504ae6963ccf359bdd73cc653345d2f8a94eb28b6c6548"
     },
     "node": {
       "version": "22"

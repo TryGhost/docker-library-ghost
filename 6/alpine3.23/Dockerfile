@@ -45,8 +45,8 @@ ENV NODE_ENV=production
 # Ghost-CLI is installed from source rather than "npm install -g ghost-cli" so that
 # pnpm can resolve the dependency tree from the lockfile committed alongside the tag
 # ("npm install -g" ignores lockfiles entirely, so the tree it produces varies by build date)
-ENV GHOST_CLI_VERSION=1.33.6
-ENV GHOST_CLI_SHA=92ffc276fa05cc6831ccd9d8027a8658e85d7aa7
+ENV GHOST_CLI_VERSION=1.33.7
+ENV GHOST_CLI_SHA=dbb445aa281f3927241aa896da4b8ea8043006e8
 ENV GHOST_CLI_INSTALL=/usr/local/lib/ghost-cli
 RUN set -eux; \
 	\
@@ -56,7 +56,7 @@ RUN set -eux; \
 # produce the version "packageManager" pins on arm32v7. pnpm 11 is the last JavaScript
 # implementation and reads the same lockfile format, so that arch installs with it instead
 	if [ "$(node -p 'process.arch')" = 'arm' ]; then \
-		npm install -g 'pnpm@11.28.2'; \
+		npm install -g 'pnpm@11.28.6'; \
 	else \
 		corepack enable; \
 	fi; \
@@ -97,7 +97,7 @@ RUN set -eux; \
 ENV GHOST_INSTALL=/var/lib/ghost
 ENV GHOST_CONTENT=/var/lib/ghost/content
 
-ENV GHOST_VERSION=6.71.0
+ENV GHOST_VERSION=6.72.0
 
 RUN set -eux; \
 	mkdir -p "$GHOST_INSTALL"; \
