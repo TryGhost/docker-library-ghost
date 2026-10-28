@@ -11,7 +11,7 @@ runs:
         path: ${{ github.action_path }}
         ref: d662ff01570964b5f648df009c9269f388285692 # HEAD
         persist-credentials: false
-    - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version-file: '${{ github.action_path }}/go.mod'
     - run: |
